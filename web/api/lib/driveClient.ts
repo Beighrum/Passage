@@ -1,8 +1,15 @@
 import { JWT } from "google-auth-library";
 import { google } from "googleapis";
 import type { drive_v3 } from "googleapis";
-import { PDFParse } from "pdf-parse";
 import type { ServiceAccountCreds } from "./driveConfig.js";
+
+/** pdf-parse v1 only — v2 pulls pdfjs + canvas and breaks Vercel serverless. Loaded on demand. */
+async function pdfBufferToText(buf: Buffer): Promise<string> {
+  const mod = await import("pdf-parse");
+  const pdfParse = mod.default as (data: Buffer) => Promise<{ text?: string }>;
+  const data = await pdfParse(buf);
+  return data.text ?? "";
+}
 
 export function createDriveClient(creds: ServiceAccountCreds) {
   const auth = new JWT({
@@ -77,13 +84,7 @@ export async function extractDriveFileText(
         { responseType: "arraybuffer" },
       );
       const buf = Buffer.from(res.data as ArrayBuffer);
-      const parser = new PDFParse({ data: buf });
-      try {
-        const textResult = await parser.getText();
-        return textResult.text || "";
-      } finally {
-        await parser.destroy();
-      }
+      return pdfBufferToText(buf);
     }
 
     if (mime.startsWith("text/") || mime === "application/json") {
