@@ -56,7 +56,46 @@ This file orients **Claude Code**, **Cursor**, and humans to what this project i
 - **Avoid:** savior narratives, “fixing Trenton,” deficit framing of the community; Passage is **of** Trenton.
 - **Grants:** triage NOFAs, reuse awarded language, no fabrication of stats or partners — see full prompt file.
 
-## Phase 3b — Google Drive “live knowledge” (RAG)
+## Google Drive — grant knowledge (how this fits today)
+
+You keep **award narratives, NOFAs, budgets, and history** in **Google Drive**. That is the right source of truth for Passage. There are **two different “Claude + Drive” ideas** — both are valid; they solve different jobs:
+
+| Context | What it does | Drive access? |
+|--------|----------------|----------------|
+| **This Passage web app** (`web/` on Vercel, `/staff/chat`) | Staff chat with your **unified system prompt**, server-side public vs internal rules, optional **thread memory** (Redis). | **Does not read Drive automatically yet.** Staff should **paste** short excerpts, NOFA text, or bullet lists into chat when needed — or we add **Phase 3b RAG** (OAuth + retrieval) in code. |
+| **Claude (claude.ai) / Claude app with Google Drive / Workspace** | Good for **browsing and drafting against live Drive** when that connector is enabled for your account. | **Yes** — if you connected Drive there. This is **separate** from the Vercel app until we build the same retrieval into `/api/chat`. |
+
+**Operational rule until Drive RAG ships in this app:** treat Drive as the **canonical library**; treat the **internal chat** as the **workflow + voice + guardrails** tool. When the model needs a document it cannot see, **paste the relevant section** (or upload text in a follow-up message). That keeps answers grounded without inventing stats.
+
+### Recommended Drive layout (fill in your links below)
+
+Use a **Shared drive** or a single top-level folder everyone trusts, with consistent names:
+
+1. **`00 — HOW TO USE THIS DRIVE`** (short doc: naming rules, what “final” means, who approves uploads.)
+2. **`01 — Awarded narratives & confirmations`** — PDFs/DOCX of **submitted/awarded** language you are allowed to reuse.
+3. **`02 — NOFAs & applications in flight`** — current opportunities; one subfolder per funder/year.
+4. **`03 — Declined / archival`** — optional; keeps “what we didn’t pursue” out of the reuse pool.
+5. **`04 — Org boilerplate`** — mission, 501(c)(3) letter, board list, audited financials **pointers** (not secrets in chat; follow prompt rules).
+
+**Paste links here (Share → Anyone with link *or* restricted to org — match your policy):**
+
+- **Root folder:** `REPLACE_WITH_GOOGLE_DRIVE_FOLDER_URL`
+- **Awarded narratives:** `REPLACE_WITH_LINK`
+- **NOFA / active:** `REPLACE_WITH_LINK`
+
+*Update these URLs when folders move. This file is for humans + tooling — not injected into the live chat prompt unless you copy it.*
+
+### What staff should paste in **internal** chat (this web app)
+
+For best grant drafts **before RAG**:
+
+- The **NOFA priorities / scoring criteria** (paste the section, not a screenshot).
+- **1–2 past awarded narratives** that match the program (paste key paragraphs, not whole 30‑page PDFs unless needed).
+- **Hard constraints:** deadline, page limits, match requirements, anything that must not be wrong.
+
+The assistant will still apply **reuse-of-awarded-language** behavior from the system prompt; it can only use what you actually provided in the thread (plus anything already in a future RAG index).
+
+## Phase 3b — In-app Drive RAG (future code in this repo)
 
 Not fully automated in code until you choose a vector store and ingestion pipeline. Planned pattern:
 
