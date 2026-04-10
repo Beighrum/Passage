@@ -1,0 +1,19 @@
+# Local environment and secrets (templates stay tracked as .env.example)
+.env
+.env.local
+.env.*.local
+web/.env
+web/.env.local
+web/.env.*.local
+
+.DS_Store
+.vercel
+
+# Large local exports / duplicates — keep the GitHub repo small (Vercel only needs `web/` + a few root files).
+# Remove these lines if you intentionally want them in Git.
+GPT convo knowledge.txt
+Claude convo Knowledge.txt
+Passage theatre 2/
+
+# Grant archive & large PDFs (optional — comment out to version these)
+Passage theatre/
