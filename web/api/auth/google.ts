@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { OAuth2Client } from "google-auth-library";
-import { SESSION_COOKIE, createSessionToken, cookieAttrs } from "../lib/session";
+import { SESSION_COOKIE, createSessionToken, cookieAttrs } from "../lib/session.js";
 
 function emailAllowed(email: string | undefined | null): boolean {
   if (!email) return false;

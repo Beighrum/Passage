@@ -1,8 +1,8 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { buildDriveIndex } from "../lib/driveRag.js";
 
 /**
  * Generic hook for Cowork, n8n, or Vercel Cron: refresh grants, reindex Drive, etc.
- * Extend the handler body with your own job branches.
  */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") {
@@ -33,11 +33,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     /* ignore */
   }
 
-  // Add branches: if (job === "guideStarPoll") { ... }
+  if (job === "reindex-drive") {
+    const result = await buildDriveIndex();
+    res.status(result.ok ? 200 : 500).json({
+      ok: result.ok,
+      job,
+      at: new Date().toISOString(),
+      error: result.error,
+      stats: result.stats,
+    });
+    return;
+  }
+
   res.status(200).json({
     ok: true,
     job,
     at: new Date().toISOString(),
-    message: "Accepted. Implement job logic in api/jobs/run.ts or call n8n webhooks from here.",
+    message: "No handler for this job. Supported: reindex-drive.",
   });
 }

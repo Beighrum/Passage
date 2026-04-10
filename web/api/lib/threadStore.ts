@@ -1,7 +1,7 @@
 import { Redis } from "@upstash/redis";
-import type { ChatMessage } from "./chatTypes";
+import type { ChatMessage } from "./chatTypes.js";
 
-function getRedis(): Redis | null {
+export function getRedis(): Redis | null {
   const url = process.env.UPSTASH_REDIS_REST_URL;
   const token = process.env.UPSTASH_REDIS_REST_TOKEN;
   if (!url || !token) return null;

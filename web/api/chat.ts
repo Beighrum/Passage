@@ -1,12 +1,13 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import Anthropic from "@anthropic-ai/sdk";
-import { buildSystemPrompt } from "./lib/buildSystemPrompt";
-import { loadUnifiedPrompt } from "./lib/loadPrompt";
-import { SESSION_COOKIE, parseCookieHeader, verifySessionToken } from "./lib/session";
-import type { ChatMessage } from "./lib/chatTypes";
-import { saveThread } from "./lib/threadStore";
-import { textFromAnthropicMessage } from "./lib/extractText";
-import { isUuidLike } from "./lib/uuid";
+import { buildSystemPrompt } from "./lib/buildSystemPrompt.js";
+import { loadUnifiedPrompt } from "./lib/loadPrompt.js";
+import { SESSION_COOKIE, parseCookieHeader, verifySessionToken } from "./lib/session.js";
+import type { ChatMessage } from "./lib/chatTypes.js";
+import { saveThread } from "./lib/threadStore.js";
+import { textFromAnthropicMessage } from "./lib/extractText.js";
+import { isUuidLike } from "./lib/uuid.js";
+import { retrieveDriveRagContext } from "./lib/driveRag.js";
 
 function parseBody(req: VercelRequest): Record<string, unknown> {
   if (req.body == null) return {};
@@ -78,6 +79,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
   if (extraSystem) {
     systemPrompt += `\n\n---\nThe interface already showed the user this assistant copy (do not repeat verbatim unless they ask):\n${extraSystem}\n`;
+  }
+
+  if (variant === "internal") {
+    const lastUser = [...thread].reverse().find((m) => m.role === "user");
+    const q = typeof lastUser?.content === "string" ? lastUser.content : "";
+    if (q.trim()) {
+      try {
+        const rag = await retrieveDriveRagContext(q);
+        if (rag) {
+          systemPrompt += `\n\n---\nDrive excerpts (cite filenames; do not invent grant stats or partners not present in excerpts):\n${rag}\n`;
+        }
+      } catch (e) {
+        console.error("driveRag", e);
+      }
+    }
   }
 
   if (thread.length === 0) {

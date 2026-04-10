@@ -14,6 +14,9 @@
   "functions": {
     "api/chat.ts": {
       "includeFiles": "prompts/**"
+    },
+    "api/jobs/run.ts": {
+      "maxDuration": 300
     }
   }
 }

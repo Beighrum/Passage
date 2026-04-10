@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { loadThread } from "./lib/threadStore";
-import { SESSION_COOKIE, parseCookieHeader, verifySessionToken } from "./lib/session";
-import { isUuidLike } from "./lib/uuid";
+import { loadThread } from "./lib/threadStore.js";
+import { SESSION_COOKIE, parseCookieHeader, verifySessionToken } from "./lib/session.js";
+import { isUuidLike } from "./lib/uuid.js";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "GET") {

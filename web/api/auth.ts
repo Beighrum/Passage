@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { timingSafeEqual } from "node:crypto";
-import { SESSION_COOKIE, createSessionToken, cookieAttrs } from "./lib/session";
+import { SESSION_COOKIE, createSessionToken, cookieAttrs } from "./lib/session.js";
 
 function safeEqualPassword(a: string, b: string): boolean {
   const bufA = Buffer.from(a, "utf8");
