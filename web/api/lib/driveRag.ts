@@ -3,7 +3,19 @@ import { getDriveRagFolderId, getServiceAccountCredentials } from "./driveConfig
 import { createDriveClient, extractDriveFileText, listFilesRecursive } from "./driveClient.js";
 
 const INDEX_KEY = "passage:drive:rag:index:v1";
-const MAX_FILES_INDEXED = 120;
+/** Default 25: Vercel Hobby serverless max ~10s; full PDF extraction cannot index hundreds of files in one run. */
+function maxFilesToIndex(): number {
+  const n = Number(process.env.DRIVE_RAG_MAX_FILES);
+  if (Number.isFinite(n) && n > 0) return Math.min(120, Math.floor(n));
+  return 25;
+}
+
+function maxFilesToGather(): number {
+  const n = Number(process.env.DRIVE_RAG_MAX_LIST_FILES);
+  if (Number.isFinite(n) && n > 0) return Math.min(2000, Math.floor(n));
+  return 600;
+}
+
 const MAX_CHARS_PER_FILE = 14_000;
 const MAX_CONTEXT_CHARS = 24_000;
 const TOP_CHUNKS = 8;
@@ -63,45 +75,54 @@ function tokenize(s: string): string[] {
 }
 
 export async function buildDriveIndex(): Promise<{ ok: boolean; error?: string; stats?: { files: number } }> {
-  const creds = getServiceAccountCredentials();
-  const folderId = getDriveRagFolderId();
-  if (!creds || !folderId) {
-    return { ok: false, error: "Missing GOOGLE_SERVICE_ACCOUNT_JSON_B64 or DRIVE_RAG_FOLDER_ID" };
-  }
-
-  const redis = getRedis();
-  if (!redis) {
-    return { ok: false, error: "UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN required for Drive RAG index" };
-  }
-
-  const drive = createDriveClient(creds);
-  let all = await listFilesRecursive(drive, folderId);
-  all.sort((a, b) => (b.modifiedTime ?? "").localeCompare(a.modifiedTime ?? ""));
-  all = all.slice(0, MAX_FILES_INDEXED);
-
-  const files: DriveIndexedFile[] = [];
-  for (const f of all) {
-    let text = await extractDriveFileText(drive, f);
-    if (text.length > MAX_CHARS_PER_FILE) {
-      text = text.slice(0, MAX_CHARS_PER_FILE) + "\n…[truncated]";
+  try {
+    const creds = getServiceAccountCredentials();
+    const folderId = getDriveRagFolderId();
+    if (!creds || !folderId) {
+      return { ok: false, error: "Missing GOOGLE_SERVICE_ACCOUNT_JSON_B64 or DRIVE_RAG_FOLDER_ID" };
     }
-    files.push({
-      id: f.id!,
-      name: f.name!,
-      mimeType: f.mimeType!,
-      modifiedTime: f.modifiedTime ?? undefined,
-      text,
-    });
+
+    const redis = getRedis();
+    if (!redis) {
+      return { ok: false, error: "UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN required for Drive RAG index" };
+    }
+
+    const maxIndex = maxFilesToIndex();
+    const maxGather = maxFilesToGather();
+
+    const drive = createDriveClient(creds);
+    let all = await listFilesRecursive(drive, folderId, 0, maxGather);
+    all.sort((a, b) => (b.modifiedTime ?? "").localeCompare(a.modifiedTime ?? ""));
+    all = all.slice(0, maxIndex);
+
+    const files: DriveIndexedFile[] = [];
+    for (const f of all) {
+      let text = await extractDriveFileText(drive, f);
+      if (text.length > MAX_CHARS_PER_FILE) {
+        text = text.slice(0, MAX_CHARS_PER_FILE) + "\n…[truncated]";
+      }
+      files.push({
+        id: f.id!,
+        name: f.name!,
+        mimeType: f.mimeType!,
+        modifiedTime: f.modifiedTime ?? undefined,
+        text,
+      });
+    }
+
+    const payload: DriveIndexPayload = {
+      builtAt: new Date().toISOString(),
+      folderId,
+      files,
+    };
+
+    await redis.set(INDEX_KEY, JSON.stringify(payload));
+    return { ok: true, stats: { files: files.length } };
+  } catch (e) {
+    console.error("buildDriveIndex", e);
+    const msg = e instanceof Error ? e.message : String(e);
+    return { ok: false, error: msg };
   }
-
-  const payload: DriveIndexPayload = {
-    builtAt: new Date().toISOString(),
-    folderId,
-    files,
-  };
-
-  await redis.set(INDEX_KEY, JSON.stringify(payload));
-  return { ok: true, stats: { files: files.length } };
 }
 
 async function loadIndex(): Promise<DriveIndexPayload | null> {

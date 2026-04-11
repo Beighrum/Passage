@@ -34,14 +34,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   if (job === "reindex-drive") {
-    const result = await buildDriveIndex();
-    res.status(result.ok ? 200 : 500).json({
-      ok: result.ok,
-      job,
-      at: new Date().toISOString(),
-      error: result.error,
-      stats: result.stats,
-    });
+    try {
+      const result = await buildDriveIndex();
+      res.status(result.ok ? 200 : 500).json({
+        ok: result.ok,
+        job,
+        at: new Date().toISOString(),
+        error: result.error,
+        stats: result.stats,
+      });
+    } catch (e) {
+      console.error("reindex-drive", e);
+      const msg = e instanceof Error ? e.message : String(e);
+      res.status(500).json({
+        ok: false,
+        job,
+        at: new Date().toISOString(),
+        error: msg,
+      });
+    }
     return;
   }
 
