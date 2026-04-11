@@ -280,10 +280,31 @@ export async function retrieveDriveRagContext(userQuery: string, scope: RagScope
     .slice(0, TOP_CHUNKS);
 
   if (scored.length === 0) {
-    return (
-      `Drive knowledge base (${scope}, indexed ${idx.builtAt}, ${idx.files.length} files): no keyword overlap with this query. ` +
-      `Answer from general Passage knowledge; do not invent grant details.`
-    );
+    const recent = [...idx.files]
+      .sort((a, b) => (b.modifiedTime ?? "").localeCompare(a.modifiedTime ?? ""))
+      .slice(0, 3);
+    const intro =
+      scope === "public"
+        ? [
+            `Indexed public library (${idx.files.length} files, ${idx.builtAt}): no keyword overlap with this question.`,
+            "For **current performances, dates, and tickets**, treat the **official website and Box Office** as authoritative (see MODE: PUBLIC links). Indexed PDFs may be older than the live site.",
+            "Recently updated documents (may still help for mission, policies, or marketing context):",
+          ].join("\n")
+        : [
+            `Indexed internal library (${idx.files.length} files, ${idx.builtAt}): no keyword overlap with this query.`,
+            "Recently updated documents (scan for relevant language; cite filenames):",
+          ].join("\n");
+    const parts: string[] = [intro];
+    for (const f of recent) {
+      const cap = scope === "public" ? 2200 : 3200;
+      const body = f.text.length > cap ? `${f.text.slice(0, cap)}\n…[truncated]` : f.text;
+      parts.push(`### ${f.name}\n${body}`);
+    }
+    let out = parts.join("\n\n");
+    if (out.length > MAX_CONTEXT_CHARS) {
+      out = out.slice(0, MAX_CONTEXT_CHARS) + "\n…[context truncated]";
+    }
+    return out;
   }
 
   const label =
