@@ -1,7 +1,9 @@
-import { useState, useRef, useEffect, type KeyboardEvent } from "react";
+import { useState, useRef, useEffect, type KeyboardEvent, type ClipboardEvent } from "react";
 import { Link } from "react-router-dom";
 import { PassageLogoMark } from "./PassageLogoMark";
 import { getOrCreateThreadId, resetThreadId } from "../lib/threadStorage";
+import type { ChatMessage, ImageMediaType, UserContentPart } from "../../shared/chatMessages";
+import { isImageMediaType } from "../../shared/chatMessages";
 
 const PURPLE = "#7B4F9E";
 const DARK_PURPLE = "#4A2D6B";
@@ -39,7 +41,55 @@ const publicIntro =
 const internalIntro =
   "Welcome to the Passage Theatre Assistant. I'm connected to Passage's institutional knowledge — grant narratives, strategic plan, programming, and policies.\n\nHow can I help today?";
 
-type ChatMessage = { role: "user" | "assistant"; content: string };
+const MAX_ATTACH = 6;
+const MAX_IMAGE_BYTES = 4_500_000;
+
+type PendingImage = { id: string; previewUrl: string; part: UserContentPart };
+
+async function fileToImagePart(file: File): Promise<UserContentPart | null> {
+  if (!file.type.startsWith("image/") || file.size > MAX_IMAGE_BYTES) return null;
+  const rawType = file.type === "image/jpg" ? "image/jpeg" : file.type;
+  if (!isImageMediaType(rawType)) return null;
+  const media_type = rawType as ImageMediaType;
+  const buf = await file.arrayBuffer();
+  const bytes = new Uint8Array(buf);
+  let binary = "";
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  return { type: "image", media_type, data: btoa(binary) };
+}
+
+function UserMessageBody({ content }: { content: string | UserContentPart[] }) {
+  if (typeof content === "string") {
+    return <>{content}</>;
+  }
+  return (
+    <>
+      {content.map((p, i) =>
+        p.type === "text" ? (
+          <span key={i} style={{ whiteSpace: "pre-wrap", display: "block" }}>
+            {p.text}
+          </span>
+        ) : (
+          <img
+            key={i}
+            src={`data:${p.media_type};base64,${p.data}`}
+            alt=""
+            style={{
+              maxWidth: "100%",
+              maxHeight: 240,
+              borderRadius: 8,
+              display: "block",
+              marginTop: i > 0 ? 8 : 0,
+            }}
+          />
+        ),
+      )}
+    </>
+  );
+}
 
 export type PassageChatProps = {
   variant: "public" | "internal";
@@ -55,12 +105,24 @@ export default function PassageChat({ variant }: PassageChatProps) {
     },
   ]);
   const [input, setInput] = useState("");
+  const [pendingImages, setPendingImages] = useState<PendingImage[]>([]);
   const [sending, setSending] = useState(false);
   const [booting, setBooting] = useState(true);
   const [apiError, setApiError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const streamAcc = useRef("");
+  const pendingRef = useRef<PendingImage[]>([]);
+  pendingRef.current = pendingImages;
+
+  const revokePreviews = (items: PendingImage[]) => {
+    for (const p of items) URL.revokeObjectURL(p.previewUrl);
+  };
+
+  useEffect(() => {
+    return () => revokePreviews(pendingRef.current);
+  }, []);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -100,6 +162,8 @@ export default function PassageChat({ variant }: PassageChatProps) {
   }, [variant]);
 
   const startNewChat = () => {
+    revokePreviews(pendingImages);
+    setPendingImages([]);
     const tid = resetThreadId(variant);
     setThreadId(tid);
     setMessages([
@@ -111,12 +175,52 @@ export default function PassageChat({ variant }: PassageChatProps) {
     setApiError(null);
   };
 
+  const addImageFiles = async (files: File[]) => {
+    const room = MAX_ATTACH - pendingImages.length;
+    if (room <= 0) return;
+    const next: PendingImage[] = [];
+    let remaining = room;
+    for (const file of files) {
+      if (remaining <= 0) break;
+      const part = await fileToImagePart(file);
+      if (!part) continue;
+      const id = crypto.randomUUID();
+      const previewUrl = URL.createObjectURL(file);
+      next.push({ id, previewUrl, part });
+      remaining -= 1;
+    }
+    if (next.length) setPendingImages((p) => [...p, ...next]);
+  };
+
+  const removePendingImage = (id: string) => {
+    setPendingImages((prev) => {
+      const found = prev.find((p) => p.id === id);
+      if (found) URL.revokeObjectURL(found.previewUrl);
+      return prev.filter((p) => p.id !== id);
+    });
+  };
+
   const handleSend = async () => {
-    if (!input.trim()) return;
-    const userMsg = { role: "user" as const, content: input.trim() };
+    const text = input.trim();
+    if (!text && pendingImages.length === 0) return;
+
+    const parts: UserContentPart[] = [];
+    if (text) parts.push({ type: "text", text });
+    for (const p of pendingImages) parts.push(p.part);
+
+    let userMsg: ChatMessage;
+    if (parts.length === 1 && parts[0].type === "text") {
+      userMsg = { role: "user", content: parts[0].text };
+    } else {
+      userMsg = { role: "user", content: parts };
+    }
+
+    revokePreviews(pendingImages);
+    setPendingImages([]);
+    setInput("");
+
     const nextThread = [...messages, userMsg];
     setMessages(nextThread);
-    setInput("");
     setApiError(null);
     streamAcc.current = "";
     setSending(true);
@@ -227,6 +331,19 @@ export default function PassageChat({ variant }: PassageChatProps) {
       e.preventDefault();
       void handleSend();
     }
+  };
+
+  const handlePasteImages = (e: ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = e.clipboardData?.items;
+    if (!items?.length) return;
+    const files: File[] = [];
+    for (let i = 0; i < items.length; i++) {
+      const f = items[i].getAsFile();
+      if (f?.type.startsWith("image/")) files.push(f);
+    }
+    if (files.length === 0) return;
+    e.preventDefault();
+    void addImageFiles(files);
   };
 
   const quickActions =
@@ -391,7 +508,11 @@ export default function PassageChat({ variant }: PassageChatProps) {
                 whiteSpace: "pre-wrap",
               }}
             >
-              {msg.content}
+              {msg.role === "user" ? (
+                <UserMessageBody content={msg.content} />
+              ) : (
+                msg.content
+              )}
             </div>
           </div>
         ))}
@@ -474,6 +595,70 @@ export default function PassageChat({ variant }: PassageChatProps) {
             {apiError}
           </div>
         )}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+          multiple
+          style={{ display: "none" }}
+          onChange={(e) => {
+            const list = e.target.files;
+            if (list?.length) void addImageFiles([...list]);
+            e.target.value = "";
+          }}
+        />
+        {pendingImages.length > 0 && (
+          <div
+            style={{
+              display: "flex",
+              gap: 8,
+              flexWrap: "wrap",
+              marginBottom: 10,
+              alignItems: "center",
+            }}
+          >
+            {pendingImages.map((p) => (
+              <div key={p.id} style={{ position: "relative" }}>
+                <img
+                  src={p.previewUrl}
+                  alt=""
+                  style={{
+                    width: 56,
+                    height: 56,
+                    objectFit: "cover",
+                    borderRadius: 8,
+                    border: `1px solid ${PURPLE}30`,
+                    display: "block",
+                  }}
+                />
+                <button
+                  type="button"
+                  aria-label="Remove image"
+                  onClick={() => removePendingImage(p.id)}
+                  style={{
+                    position: "absolute",
+                    top: -6,
+                    right: -6,
+                    width: 22,
+                    height: 22,
+                    borderRadius: "50%",
+                    border: "none",
+                    background: CHARCOAL,
+                    color: "#fff",
+                    fontSize: 14,
+                    lineHeight: 1,
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
         <div
           style={{
             display: "flex",
@@ -481,17 +666,49 @@ export default function PassageChat({ variant }: PassageChatProps) {
             gap: 10,
             background: "#fff",
             borderRadius: 14,
-            padding: "4px 4px 4px 16px",
+            padding: "4px 4px 4px 8px",
             border: `1.5px solid ${PURPLE}25`,
             boxShadow: "0 2px 12px rgba(123,79,158,0.06)",
             transition: "border-color 0.2s ease",
           }}
         >
+          <button
+            type="button"
+            aria-label="Attach image"
+            title="Attach image"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={pendingImages.length >= MAX_ATTACH || sending}
+            style={{
+              width: 40,
+              height: 40,
+              marginBottom: 2,
+              borderRadius: 10,
+              border: "none",
+              background: "transparent",
+              color: pendingImages.length >= MAX_ATTACH ? "#ccc" : PURPLE,
+              cursor: pendingImages.length >= MAX_ATTACH || sending ? "default" : "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+            }}
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
+              <path
+                d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
           <textarea
             ref={inputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
+            onPaste={handlePasteImages}
             placeholder={
               mode === "internal"
                 ? "Ask about grants, programming, strategy..."
@@ -516,17 +733,18 @@ export default function PassageChat({ variant }: PassageChatProps) {
           <button
             type="button"
             onClick={() => void handleSend()}
-            disabled={!input.trim() || sending}
+            disabled={(!input.trim() && pendingImages.length === 0) || sending}
             style={{
               width: 40,
               height: 40,
               borderRadius: 10,
               border: "none",
               background:
-                input.trim() && !sending
+                (input.trim() || pendingImages.length > 0) && !sending
                   ? `linear-gradient(135deg, ${PURPLE}, ${DARK_PURPLE})`
                   : "#E0D5E8",
-              cursor: input.trim() && !sending ? "pointer" : "default",
+              cursor:
+                (input.trim() || pendingImages.length > 0) && !sending ? "pointer" : "default",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -558,7 +776,7 @@ export default function PassageChat({ variant }: PassageChatProps) {
             letterSpacing: 0.3,
           }}
         >
-          Passage Theatre Assistant · Built by BeighTech
+          Passage Theatre Assistant · Images: paste or attach (JPEG, PNG, GIF, WebP) · Built by BeighTech
         </div>
       </div>
 

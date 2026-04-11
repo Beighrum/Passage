@@ -1,13 +1,36 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import Anthropic from "@anthropic-ai/sdk";
+import type { ContentBlockParam } from "@anthropic-ai/sdk/resources/messages";
 import { buildSystemPrompt } from "./lib/buildSystemPrompt.js";
 import { loadUnifiedPrompt } from "./lib/loadPrompt.js";
 import { SESSION_COOKIE, parseCookieHeader, verifySessionToken } from "./lib/session.js";
-import type { ChatMessage } from "./lib/chatTypes.js";
+import type { UserContentPart } from "./lib/chatTypes.js";
+import { flattenUserText } from "../shared/chatMessages.js";
 import { saveThread } from "./lib/threadStore.js";
 import { textFromAnthropicMessage } from "./lib/extractText.js";
 import { isUuidLike } from "./lib/uuid.js";
 import { retrieveDriveRagContext } from "./lib/driveRag.js";
+import { parseChatMessages, sanitizeMessagesForStorage } from "./lib/validateChatMessages.js";
+
+function toAnthropicUserBlocks(content: string | UserContentPart[]): ContentBlockParam[] {
+  if (typeof content === "string") {
+    const t = content.trim();
+    if (!t) return [];
+    return [{ type: "text", text: content }];
+  }
+  const blocks: ContentBlockParam[] = [];
+  for (const p of content) {
+    if (p.type === "text") {
+      if (p.text.trim()) blocks.push({ type: "text", text: p.text });
+    } else {
+      blocks.push({
+        type: "image",
+        source: { type: "base64", media_type: p.media_type, data: p.data },
+      });
+    }
+  }
+  return blocks;
+}
 
 function parseBody(req: VercelRequest): Record<string, unknown> {
   if (req.body == null) return {};
@@ -47,8 +70,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
-  const messages = Array.isArray(raw.messages) ? (raw.messages as ChatMessage[]) : [];
-  if (messages.length === 0) {
+  const messages = parseChatMessages(raw.messages);
+  if (!messages || messages.length === 0) {
     res.status(400).json({ error: "No messages" });
     return;
   }
@@ -83,7 +106,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (variant === "internal") {
     const lastUser = [...thread].reverse().find((m) => m.role === "user");
-    const q = typeof lastUser?.content === "string" ? lastUser.content : "";
+    const q = lastUser?.role === "user" ? flattenUserText(lastUser.content) : "";
     if (q.trim()) {
       try {
         const rag = await retrieveDriveRagContext(q);
@@ -103,9 +126,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const claudeMessages: Anthropic.MessageParam[] = [];
   for (const m of thread) {
-    if (m.role !== "user" && m.role !== "assistant") continue;
-    if (typeof m.content !== "string" || !m.content.trim()) continue;
-    claudeMessages.push({ role: m.role, content: m.content });
+    if (m.role === "assistant") {
+      if (typeof m.content !== "string" || !m.content.trim()) continue;
+      claudeMessages.push({ role: "assistant", content: m.content });
+      continue;
+    }
+    if (m.role === "user") {
+      const blocks = toAnthropicUserBlocks(m.content);
+      if (blocks.length === 0) continue;
+      claudeMessages.push({ role: "user", content: blocks });
+    }
   }
 
   if (claudeMessages.length === 0) {
@@ -124,7 +154,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const persist = async (assistantText: string) => {
     if (!isUuidLike(threadId)) return;
-    const saved: ChatMessage[] = [...messages, { role: "assistant", content: assistantText }];
+    const saved = sanitizeMessagesForStorage([...messages, { role: "assistant", content: assistantText }]);
     await saveThread(variant, threadId, saved);
   };
 

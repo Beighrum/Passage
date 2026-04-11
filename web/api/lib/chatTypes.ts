@@ -1,1 +1,5 @@
-export type ChatMessage = { role: "user" | "assistant"; content: string };
+export type {
+  ChatMessage,
+  UserContentPart,
+  ImageMediaType,
+} from "../../shared/chatMessages.js";
