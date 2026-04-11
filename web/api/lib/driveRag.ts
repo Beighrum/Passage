@@ -112,9 +112,9 @@ export async function buildDriveIndexForScope(
     if (!creds || folderIds.length === 0) {
       const need =
         scope === "public"
-          ? "DRIVE_RAG_FOLDER_ID_PUBLIC"
-          : "DRIVE_RAG_FOLDER_ID_INTERNAL, DRIVE_RAG_FOLDER_ID_GRANTS, DRIVE_RAG_FOLDER_ID_ANNUAL_NEWSLETTER, or legacy DRIVE_RAG_FOLDER_ID";
-      return { ok: false, error: `Missing GOOGLE_SERVICE_ACCOUNT_JSON_B64 or ${need}` };
+          ? "DRIVE_RAG_FOLDER_ID_PUBLIC (folder ID from the Drive URL …/folders/THIS_PART, or paste the full folder URL)"
+          : "DRIVE_RAG_FOLDER_ID_INTERNAL / GRANTS / ANNUAL_NEWSLETTER / legacy DRIVE_RAG_FOLDER_ID — each value must be a valid folder ID or full …/folders/… URL (not “.” or empty)";
+      return { ok: false, error: `No valid folder IDs for ${scope} index after parsing env. ${need}` };
     }
 
     const redis = getRedis();

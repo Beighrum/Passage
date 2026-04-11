@@ -25,13 +25,29 @@ export function getServiceAccountCredentials(): ServiceAccountCreds | null {
   return null;
 }
 
-/** Split comma/semicolon/whitespace-separated Drive folder IDs */
+/**
+ * Accepts a bare folder ID or a full `https://drive.google.com/.../folders/FOLDER_ID` URL.
+ * Rejects placeholders like `.`, short junk, or unparseable URLs (avoids Google error "File not found: .").
+ */
+export function normalizeDriveFolderId(input: string): string | null {
+  let t = input.trim();
+  if (!t || t === ".") return null;
+  const fromPath = t.match(/\/folders\/([a-zA-Z0-9_-]+)/);
+  if (fromPath) t = fromPath[1];
+  else if (/^https?:\/\//i.test(t)) return null;
+  t = t.replace(/^["']|["']$/g, "");
+  if (t.length < 10 || t === ".") return null;
+  if (!/^[a-zA-Z0-9_-]+$/.test(t)) return null;
+  return t;
+}
+
+/** Split comma/semicolon/whitespace-separated Drive folder IDs or URLs */
 function splitFolderIds(raw: string | undefined): string[] {
   if (!raw?.trim()) return [];
   const ids = new Set<string>();
   for (const part of raw.split(/[,;\s]+/)) {
-    const t = part.trim();
-    if (t) ids.add(t);
+    const n = normalizeDriveFolderId(part);
+    if (n) ids.add(n);
   }
   return [...ids];
 }
@@ -54,10 +70,10 @@ export function getPublicDriveRootIds(): string[] {
 export function getInternalDriveRootIds(): string[] {
   const ids = new Set<string>();
   for (const id of splitFolderIds(process.env.DRIVE_RAG_FOLDER_ID_INTERNAL)) ids.add(id);
-  const grants = process.env.DRIVE_RAG_FOLDER_ID_GRANTS?.trim();
-  if (grants) ids.add(grants);
-  const newsletter = process.env.DRIVE_RAG_FOLDER_ID_ANNUAL_NEWSLETTER?.trim();
-  if (newsletter) ids.add(newsletter);
+  const g = normalizeDriveFolderId(process.env.DRIVE_RAG_FOLDER_ID_GRANTS ?? "");
+  if (g) ids.add(g);
+  const n = normalizeDriveFolderId(process.env.DRIVE_RAG_FOLDER_ID_ANNUAL_NEWSLETTER ?? "");
+  if (n) ids.add(n);
   if (ids.size === 0) {
     for (const id of splitFolderIds(process.env.DRIVE_RAG_FOLDER_ID)) ids.add(id);
   }
