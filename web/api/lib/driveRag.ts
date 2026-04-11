@@ -1,6 +1,6 @@
 import { getRedis } from "./threadStore.js";
 import { getDriveRagFolderId, getServiceAccountCredentials } from "./driveConfig.js";
-import { createDriveClient, extractDriveFileText, listFilesRecursive } from "./driveClient.js";
+import { createDriveClient, listFilesRecursive } from "./driveClient.js";
 
 const INDEX_KEY = "passage:drive:rag:index:v1";
 /** Default 25: Vercel Hobby serverless max ~10s; full PDF extraction cannot index hundreds of files in one run. */
@@ -91,6 +91,7 @@ export async function buildDriveIndex(): Promise<{ ok: boolean; error?: string; 
     const maxGather = maxFilesToGather();
 
     const drive = createDriveClient(creds);
+    const { extractDriveFileText } = await import("./driveExtract.js");
     let all = await listFilesRecursive(drive, folderId, 0, maxGather);
     all.sort((a, b) => (b.modifiedTime ?? "").localeCompare(a.modifiedTime ?? ""));
     all = all.slice(0, maxIndex);
