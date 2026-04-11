@@ -104,18 +104,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     systemPrompt += `\n\n---\nThe interface already showed the user this assistant copy (do not repeat verbatim unless they ask):\n${extraSystem}\n`;
   }
 
-  if (variant === "internal") {
-    const lastUser = [...thread].reverse().find((m) => m.role === "user");
-    const q = lastUser?.role === "user" ? flattenUserText(lastUser.content) : "";
-    if (q.trim()) {
-      try {
-        const rag = await retrieveDriveRagContext(q);
-        if (rag) {
-          systemPrompt += `\n\n---\nDrive excerpts (cite filenames; do not invent grant stats or partners not present in excerpts):\n${rag}\n`;
-        }
-      } catch (e) {
-        console.error("driveRag", e);
+  const lastUserForRag = [...thread].reverse().find((m) => m.role === "user");
+  const ragQuery =
+    lastUserForRag?.role === "user" ? flattenUserText(lastUserForRag.content) : "";
+  if (ragQuery.trim()) {
+    try {
+      const rag = await retrieveDriveRagContext(ragQuery);
+      if (rag) {
+        const intro =
+          variant === "internal"
+            ? "Drive / indexed excerpts (cite filenames; do not invent grant stats, partners, or outcomes not present in excerpts):"
+            : "Indexed Passage excerpts — PUBLIC: Use audience-appropriate facts only (shows, tickets, venue, accessibility, public-facing policies, marketing/social summaries). If retrieved text looks internal (grants, board, confidential HR), do not quote it; answer from general Passage public knowledge or direct to the Box Office / website. For ticket purchases always give the official ticketing link and Box Office contact.";
+        systemPrompt += `\n\n---\n${intro}\n\n${rag}\n`;
       }
+    } catch (e) {
+      console.error("driveRag", e);
     }
   }
 

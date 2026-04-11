@@ -17,10 +17,12 @@ export function PassageLogoMark({ size = 40, className }: PassageLogoMarkProps) 
       width={size}
       height={size}
       style={{
-        width: size,
-        height: size,
+        width: `min(${size}px, 85vw)`,
+        height: `min(${size}px, 85vw)`,
         objectFit: "contain",
         display: "block",
+        marginLeft: "auto",
+        marginRight: "auto",
       }}
     />
   );

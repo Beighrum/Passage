@@ -36,7 +36,9 @@ export function buildSystemPrompt(full: string, variant: "public" | "internal"):
     /### Source Citation \(Internal Mode Only\)[\s\S]*?(?=\n---)/,
     [
       "### Source citation (public)",
-      "- Prefer official website and box office for factual claims; do not cite internal documents.",
+      "- When an answer uses retrieved indexed Passage documents (server-injected excerpts), you may reference the document by filename.",
+      "- Do not imply access to private staff systems; frame facts as from Passage’s published or indexed materials.",
+      "- For anything not supported by excerpts or the public site, direct users to the Box Office or passagetheatre.org.",
     ].join("\n"),
   );
 

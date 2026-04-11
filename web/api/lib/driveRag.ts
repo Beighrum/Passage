@@ -162,7 +162,8 @@ function excerptAround(text: string, queryTokens: string[], maxLen: number): str
 }
 
 /**
- * Returns markdown-ish context for internal assistant only. Caller adds citation rules.
+ * Returns markdown-ish context for the chat request. Used for both public and internal;
+ * chat.ts adds mode-specific instructions (audience filtering vs full citation).
  */
 export async function retrieveDriveRagContext(userQuery: string): Promise<string | null> {
   if (!isDriveRagReady()) return null;

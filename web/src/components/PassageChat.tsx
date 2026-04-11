@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, type KeyboardEvent, type ClipboardEvent } from "react";
 import { Link } from "react-router-dom";
 import { PassageLogoMark } from "./PassageLogoMark";
+import { AssistantMarkdown } from "./AssistantMarkdown";
 import { getOrCreateThreadId, resetThreadId } from "../lib/threadStorage";
 import type { ChatMessage, ImageMediaType, UserContentPart } from "../../shared/chatMessages";
 import { isImageMediaType } from "../../shared/chatMessages";
@@ -505,13 +506,13 @@ export default function PassageChat({ variant }: PassageChatProps) {
                     }),
                 fontSize: 14,
                 lineHeight: 1.55,
-                whiteSpace: "pre-wrap",
+                whiteSpace: msg.role === "user" ? "pre-wrap" : "normal",
               }}
             >
               {msg.role === "user" ? (
                 <UserMessageBody content={msg.content} />
               ) : (
-                msg.content
+                <AssistantMarkdown content={msg.content} linkColor={PURPLE} />
               )}
             </div>
           </div>

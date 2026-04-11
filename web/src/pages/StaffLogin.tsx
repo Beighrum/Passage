@@ -49,7 +49,15 @@ export default function StaffLogin() {
               credentials: "include",
               body: JSON.stringify({ credential: response.credential }),
             });
-            const data = (await res.json()) as { error?: string };
+            const raw = await res.text();
+            let data: { error?: string } = {};
+            if (raw) {
+              try {
+                data = JSON.parse(raw) as { error?: string };
+              } catch {
+                /* ignore */
+              }
+            }
             if (!res.ok) {
               setError(data.error ?? "Google sign-in failed.");
               return;
@@ -90,7 +98,7 @@ export default function StaffLogin() {
     return (
       <div
         style={{
-          minHeight: "100vh",
+          minHeight: "100dvh",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -123,9 +131,22 @@ export default function StaffLogin() {
         credentials: "include",
         body: JSON.stringify({ password }),
       });
-      const data = (await res.json()) as { error?: string };
+      const raw = await res.text();
+      let data: { error?: string } = {};
+      if (raw) {
+        try {
+          data = JSON.parse(raw) as { error?: string };
+        } catch {
+          /* non-JSON error body */
+        }
+      }
       if (!res.ok) {
-        setError(data.error ?? "Login failed.");
+        setError(
+          data.error ??
+            (res.status === 401
+              ? "Invalid password. If it keeps failing, confirm PASSAGE_INTERNAL_PASSWORD in Vercel matches this deployment."
+              : `Login failed (${res.status}).`),
+        );
         return;
       }
       navigate("/staff/chat", { replace: true });
@@ -139,12 +160,16 @@ export default function StaffLogin() {
   return (
     <div
       style={{
-        minHeight: "100vh",
+        minHeight: "100dvh",
+        width: "100%",
+        maxWidth: "100%",
+        boxSizing: "border-box",
+        overflowX: "hidden",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        padding: 24,
+        padding: "24px max(16px, env(safe-area-inset-right)) 24px max(16px, env(safe-area-inset-left))",
         background: `radial-gradient(ellipse at 50% 35%, ${BG}ee 0%, ${BG} 55%, #1a0f1c 100%)`,
         fontFamily: "'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif",
       }}
@@ -154,12 +179,20 @@ export default function StaffLogin() {
         rel="stylesheet"
       />
 
-      <div style={{ textAlign: "center", marginBottom: 28 }}>
+      <div
+        style={{
+          textAlign: "center",
+          marginBottom: 28,
+          width: "100%",
+          maxWidth: 400,
+          boxSizing: "border-box",
+        }}
+      >
         <PassageLogoMark size={200} />
         <h1
           style={{
             margin: "20px 0 6px",
-            fontSize: 22,
+            fontSize: "clamp(1.125rem, 4vw, 1.375rem)",
             fontWeight: 700,
             color: "#fff",
             letterSpacing: 0.3,
@@ -167,7 +200,16 @@ export default function StaffLogin() {
         >
           Staff access
         </h1>
-        <p style={{ margin: 0, fontSize: 14, color: "rgba(255,255,255,0.65)" }}>
+        <p
+          style={{
+            margin: 0,
+            fontSize: 14,
+            color: "rgba(255,255,255,0.65)",
+            lineHeight: 1.45,
+            padding: "0 4px",
+            overflowWrap: "anywhere",
+          }}
+        >
           Internal assistant · grants, programming, executive support
         </p>
       </div>
