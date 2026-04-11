@@ -5,7 +5,7 @@ const MAX_PDF_BYTES = 12 * 1024 * 1024;
 /**
  * PDF text extraction lives in this file alone so `/api/chat` never loads `pdf-parse`
  * (Vercel bundles traced deps; pdf-parse v2 pulls pdfjs/canvas and crashes serverless).
- * Only `buildDriveIndex` dynamic-imports this module.
+ * Only `buildDriveIndexForScope` dynamic-imports this module.
  */
 async function pdfBufferToText(buf: Buffer): Promise<string> {
   const mod = await import("pdf-parse");

@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { isDriveRagEnvConfigured } from "../lib/driveConfig.js";
-import { hasDriveIndexInRedis } from "../lib/driveRag.js";
+import { getDriveRagIndexStatus } from "../lib/driveRag.js";
 import { isRedisConfigured } from "../lib/threadStore.js";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -10,7 +10,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const driveConfigured = isDriveRagEnvConfigured();
-  const driveIndexed = driveConfigured ? await hasDriveIndexInRedis() : false;
+  const driveStatus = await getDriveRagIndexStatus();
 
   res.status(200).json({
     upstashRedis: isRedisConfigured(),
@@ -19,7 +19,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     anthropic: !!process.env.ANTHROPIC_API_KEY,
     driveRag: {
       configured: driveConfigured,
-      indexed: driveIndexed,
+      public: driveStatus.public,
+      internal: driveStatus.internal,
+      indexed: driveStatus.public.indexed || driveStatus.internal.indexed,
     },
   });
 }

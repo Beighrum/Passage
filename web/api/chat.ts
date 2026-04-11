@@ -109,7 +109,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     lastUserForRag?.role === "user" ? flattenUserText(lastUserForRag.content) : "";
   if (ragQuery.trim()) {
     try {
-      const rag = await retrieveDriveRagContext(ragQuery);
+      const rag = await retrieveDriveRagContext(ragQuery, variant === "internal" ? "internal" : "public");
       if (rag) {
         const intro =
           variant === "internal"

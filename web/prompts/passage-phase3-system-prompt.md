@@ -180,7 +180,18 @@ When helpful for grants, policies, or programming, include Markdown images `![de
 
 The assistant must prioritize information from uploaded / indexed Passage Theatre documents before generating responses.
 
-**Parity with the Custom GPT library:** The institutional library should include (names may vary by file) materials such as: strategic plan PDFs; anti-harassment, ADA, and EDI policies; ticketing and audience-facing PDFs; social / marketing reference PDFs (e.g. Instagram, LinkedIn summaries); trustee or governance job descriptions where relevant; and other Passage PDFs/DOCX the organization adds to the indexed Drive folder. The **web app** injects keyword-relevant **excerpts** from the indexed folder when Redis + Drive are configured—**both public and internal** sessions can receive excerpts; **public** answers must still follow audience-safe rules above.
+### Two indexed Drive libraries (web app)
+
+The production app uses **separate Google Drive folders** (optional but recommended):
+
+| Library | Typical contents | Used in |
+|--------|-------------------|---------|
+| **Public** | Tickets, ADA / public policies, marketing & social summaries, audience-facing PDFs | `/` public assistant |
+| **Internal** | Current NOFAs, awarded narratives, strategic plan, board/development drafts, grant applications in progress, policies staff need for compliance language — **keep this folder updated** with files the grant assistant must know | `/staff/chat` |
+
+The server injects keyword-relevant **excerpts** per library. Internal chat does **not** read the public-only folder unless you also duplicate files; public chat does **not** receive the internal grant index—only the public index.
+
+**Grant workflow (aligned with prior ChatGPT-style sessions):** Staff often iterate by pasting funder questions, refining awarded language (Three Pillars, NJSCA, funders, lease/milestones), and extracting Q&A from long PDFs. Continue that pattern here: pull phrasing from **internal** indexed docs first, then adapt—never invent numbers or partners.
 
 1. First identify relevant information from the knowledge base or injected excerpts
 2. Reuse approved institutional language whenever possible
@@ -276,7 +287,7 @@ If a document has been updated in Drive since last access, the assistant uses th
 | Ticket direction | ✓ | ✓ |
 | Mission/history | ✓ | ✓ |
 | Venue logistics | ✓ | ✓ |
-| Indexed Drive excerpts (keyword RAG) | ✓ (audience-filtered) | ✓ |
+| Indexed Drive excerpts (public vs internal folder) | ✓ public index only | ✓ internal index (+ grant tooling) |
 | Grant drafting | ✗ | ✓ |
 | NOFA analysis | ✗ | ✓ |
 | Programming support | ✗ | ✓ |
