@@ -42,7 +42,7 @@ export function buildSystemPrompt(full: string, variant: "public" | "internal"):
     ].join("\n"),
   );
 
-  return [
+  const body = [
     "ACTIVE_SESSION_MODE: PUBLIC",
     "Obey MODE: PUBLIC only. Do not provide internal grant tooling, Drive access, or staff-only operational detail.",
     "",
@@ -50,4 +50,18 @@ export function buildSystemPrompt(full: string, variant: "public" | "internal"):
     "\n\n",
     tail.trim(),
   ].join("");
+
+  // Earlier sections say "knowledge base" and CORE RULES say "not in the knowledge base" — models often treat that as
+  // Drive-only and refuse to use in-prompt show copy. This block wins (last-instructions priority).
+  const publicOverride = [
+    "",
+    "---",
+    "PRIORITY OVERRIDE (PUBLIC — READ LAST)",
+    'In PUBLIC mode, "knowledge base" includes this entire system prompt, especially MODE: PUBLIC (including **Current programming highlights**), PASSAGE THEATRE — VOICE & IDENTITY, and official URLs/phone numbers listed here.',
+    "When the user asks about Passage shows, season, programming, or what is playing: answer from those sections first. Summarize mainstage titles (e.g. Dutchman / The Slave, Muleheaded), pillars, and links. Do **not** say you have no information, cannot help, or lack a knowledge base because Drive retrieval is empty.",
+    "For exact performance dates/times not printed in this prompt, give https://www.passagetheatre.org/shows-events and Box Office (609) 392-0766 — that is not 'I don't know'; it is the correct handoff to the live calendar.",
+    "Do not invent specific performance dates, prices, or casting not stated in this prompt or on passagetheatre.org.",
+  ].join("\n");
+
+  return body + publicOverride;
 }
