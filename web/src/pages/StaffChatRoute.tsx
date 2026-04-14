@@ -1,9 +1,11 @@
 import { Navigate } from "react-router-dom";
 import PassageChat from "../components/PassageChat";
 import { useStaffSession } from "../hooks/useStaffSession";
+import { useSupabaseSession } from "@/hooks/useSupabaseSession";
 
 export default function StaffChatRoute() {
   const session = useStaffSession();
+  const supa = useSupabaseSession();
 
   if (session === "loading") {
     return (
@@ -22,7 +24,7 @@ export default function StaffChatRoute() {
     );
   }
 
-  if (session === "no") {
+  if (session === "no" && supa.status !== "signed_in") {
     return <Navigate to="/staff" replace />;
   }
 

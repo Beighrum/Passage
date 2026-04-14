@@ -1,3 +1,37 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Passage purple as primary */
+  --background: 0 0% 100%;
+  --foreground: 240 10% 3.9%;
+
+  --card: 0 0% 100%;
+  --card-foreground: 240 10% 3.9%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 240 10% 3.9%;
+
+  --primary: 270 34% 46%; /* #7B4F9E */
+  --primary-foreground: 0 0% 100%;
+
+  --secondary: 270 30% 96%;
+  --secondary-foreground: 270 25% 25%;
+
+  --muted: 270 20% 96%;
+  --muted-foreground: 240 3.8% 46.1%;
+
+  --accent: 270 25% 95%;
+  --accent-foreground: 270 25% 25%;
+
+  --destructive: 0 84.2% 60.2%;
+  --destructive-foreground: 0 0% 98%;
+
+  --border: 270 20% 90%;
+  --input: 270 20% 90%;
+  --ring: 270 34% 46%;
+}
+
 *,
 *::before,
 *::after {

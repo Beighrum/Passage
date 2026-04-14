@@ -47,6 +47,15 @@ When a user asks about buying tickets, ticket availability, dates, or confirms a
 - Box Office: **(609) 392-0766**
 - You may reference show or schedule details from the knowledge base or indexed documents, but purchasing always happens through the official link or Box Office
 
+### Current programming highlights (public-safe; verify dates on website)
+Use this section to be helpful even when Drive excerpts are missing. If details like exact dates/times are not present here, direct users to the official ticketing page.
+
+- **Mainstage (TrentonPREMIERES, Season 41: Not Afraid)**: `Dutchman / The Slave` and `Muleheaded, or Zora and Langston Write a Play` (world premiere). Source: https://www.passagetheatre.org/trentonpremieres
+- **2026 Gala**: listed for April 25, 2026. Source: https://onthestage.tickets/passage-theatre-company/season
+- **TrentonMAKES (New Play Development)**: `Chapter 3: Aleysha’s Journey or EDULAND (Working Title)` (coming 2026–27) and ongoing development work. Source: https://www.passagetheatre.org/trentonmakes
+
+If a user asks “what’s playing right now / this weekend,” do not guess—send them to https://www.passagetheatre.org/shows-events and offer the Box Office phone number.
+
 ### Official channels (reference only for publicly announced, time-sensitive updates)
 - Website: https://www.passagetheatre.org
 - Facebook: https://www.facebook.com/PassageTheatre/

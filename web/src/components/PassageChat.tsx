@@ -5,6 +5,8 @@ import { AssistantMarkdown } from "./AssistantMarkdown";
 import { getOrCreateThreadId, resetThreadId } from "../lib/threadStorage";
 import type { ChatMessage, ImageMediaType, UserContentPart } from "../../shared/chatMessages";
 import { isImageMediaType } from "../../shared/chatMessages";
+import { getPassageWatermarkDataUrl } from "@/lib/passage-brand";
+import { AiAssistantCard } from "@/components/ui/ai-assistant-card";
 
 const PURPLE = "#7B4F9E";
 const DARK_PURPLE = "#4A2D6B";
@@ -387,6 +389,7 @@ export default function PassageChat({ variant }: PassageChatProps) {
         height: "100vh",
         display: "flex",
         flexDirection: "column",
+        position: "relative",
         background: `linear-gradient(180deg, ${LIGHT_PURPLE} 0%, ${SOFT_WHITE} 30%)`,
         fontFamily: "'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif",
       }}
@@ -395,6 +398,22 @@ export default function PassageChat({ variant }: PassageChatProps) {
         href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Playfair+Display:ital,wght@1,600&display=swap"
         rel="stylesheet"
       />
+
+      {variant === "public" ? (
+        <div
+          aria-hidden
+          style={{
+            position: "absolute",
+            inset: 0,
+            zIndex: 0,
+            pointerEvents: "none",
+            backgroundImage: `url("${getPassageWatermarkDataUrl({ fill: PURPLE })}")`,
+            backgroundRepeat: "repeat",
+            backgroundSize: "320px 320px",
+            opacity: 0.06,
+          }}
+        />
+      ) : null}
 
       <div
         style={{
@@ -405,6 +424,8 @@ export default function PassageChat({ variant }: PassageChatProps) {
           borderBottom: `1px solid ${PURPLE}15`,
           background: "rgba(255,255,255,0.85)",
           backdropFilter: "blur(12px)",
+          position: "relative",
+          zIndex: 1,
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -464,8 +485,22 @@ export default function PassageChat({ variant }: PassageChatProps) {
           opacity: booting ? 0.35 : 1,
           pointerEvents: booting ? "none" : "auto",
           transition: "opacity 0.2s ease",
+          position: "relative",
+          zIndex: 1,
         }}
       >
+        {variant === "internal" && messages.length <= 1 ? (
+          <div style={{ display: "flex", justifyContent: "center", padding: "6px 0 12px" }}>
+            <AiAssistantCard
+              name="Brishen"
+              onPrompt={(text) => {
+                setInput(text);
+                window.setTimeout(() => inputRef.current?.focus(), 50);
+              }}
+            />
+          </div>
+        ) : null}
+
         {booting && (
           <div
             style={{
@@ -544,6 +579,8 @@ export default function PassageChat({ variant }: PassageChatProps) {
             gap: 8,
             flexWrap: "wrap",
             justifyContent: "center",
+            position: "relative",
+            zIndex: 1,
           }}
         >
           {quickActions.map((action, i) => (
@@ -580,6 +617,8 @@ export default function PassageChat({ variant }: PassageChatProps) {
           background: "rgba(255,255,255,0.9)",
           backdropFilter: "blur(12px)",
           borderTop: `1px solid ${PURPLE}10`,
+          position: "relative",
+          zIndex: 1,
         }}
       >
         {apiError && (

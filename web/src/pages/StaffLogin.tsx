@@ -2,6 +2,12 @@ import { useState, useEffect, type FormEvent } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import { PassageLogoMark } from "../components/PassageLogoMark";
 import { useStaffSession } from "../hooks/useStaffSession";
+import { GooeyFilter } from "@/components/ui/gooey-filter";
+import { PixelTrail } from "@/components/ui/pixel-trail";
+import { useScreenSize } from "@/hooks/use-screen-size";
+import { getPassageCursorDataUrl, getPassageWatermarkDataUrl } from "@/lib/passage-brand";
+import { supabase } from "@/lib/supabaseClient";
+import { useSupabaseSession } from "@/hooks/useSupabaseSession";
 
 const BG = "#2E1A31";
 const PURPLE = "#7B4F9E";
@@ -10,9 +16,13 @@ const LIGHT = "#F3EBF9";
 export default function StaffLogin() {
   const navigate = useNavigate();
   const session = useStaffSession();
+  const supa = useSupabaseSession();
+  const screenSize = useScreenSize();
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [email, setEmail] = useState("");
+  const [emailPassword, setEmailPassword] = useState("");
   const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
   useEffect(() => {
@@ -120,6 +130,10 @@ export default function StaffLogin() {
     return <Navigate to="/staff/chat" replace />;
   }
 
+  if (supa.status === "signed_in") {
+    return <Navigate to="/staff/chat" replace />;
+  }
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -157,6 +171,28 @@ export default function StaffLogin() {
     }
   };
 
+  const handleSupabaseSignIn = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!supabase) return;
+    setError(null);
+    setSubmitting(true);
+    try {
+      const { error: supaErr } = await supabase.auth.signInWithPassword({
+        email,
+        password: emailPassword,
+      });
+      if (supaErr) {
+        setError(supaErr.message);
+        return;
+      }
+      navigate("/staff/chat", { replace: true });
+    } catch {
+      setError("Supabase sign-in failed.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
     <div
       style={{
@@ -165,6 +201,7 @@ export default function StaffLogin() {
         maxWidth: "100%",
         boxSizing: "border-box",
         overflowX: "hidden",
+        position: "relative",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
@@ -172,12 +209,49 @@ export default function StaffLogin() {
         padding: "24px max(16px, env(safe-area-inset-right)) 24px max(16px, env(safe-area-inset-left))",
         background: `radial-gradient(ellipse at 50% 35%, ${BG}ee 0%, ${BG} 55%, #1a0f1c 100%)`,
         fontFamily: "'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif",
+        cursor: `url("${getPassageCursorDataUrl({ fill: PURPLE })}") 16 16, auto`,
       }}
     >
       <link
         href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&display=swap"
         rel="stylesheet"
       />
+
+      <GooeyFilter id="staff-gooey-filter-pixel-trail" strength={5} />
+
+      <div
+        aria-hidden
+        style={{
+          position: "absolute",
+          inset: 0,
+          zIndex: 0,
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            backgroundImage: `url("${getPassageWatermarkDataUrl({ fill: PURPLE })}")`,
+            backgroundRepeat: "repeat",
+            backgroundSize: "260px 260px",
+            opacity: 0.12,
+            transform: "rotate(-8deg) scale(1.08)",
+            transformOrigin: "center",
+          }}
+        />
+
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            filter: "url(#staff-gooey-filter-pixel-trail)",
+            opacity: 0.95,
+          }}
+        >
+          <PixelTrail pixelSize={screenSize.lessThan("md") ? 22 : 28} fadeDuration={650} delay={0} />
+        </div>
+      </div>
 
       <div
         style={{
@@ -186,6 +260,8 @@ export default function StaffLogin() {
           width: "100%",
           maxWidth: 400,
           boxSizing: "border-box",
+          position: "relative",
+          zIndex: 2,
         }}
       >
         <PassageLogoMark size={200} />
@@ -224,6 +300,8 @@ export default function StaffLogin() {
           borderRadius: 16,
           padding: "24px 22px 22px",
           backdropFilter: "blur(8px)",
+          position: "relative",
+          zIndex: 2,
         }}
       >
         <label
@@ -294,6 +372,94 @@ export default function StaffLogin() {
         </button>
       </form>
 
+      {supabase ? (
+        <form
+          onSubmit={(e) => void handleSupabaseSignIn(e)}
+          style={{
+            width: "100%",
+            maxWidth: 360,
+            marginTop: 14,
+            background: "rgba(255,255,255,0.06)",
+            border: "1px solid rgba(255,255,255,0.12)",
+            borderRadius: 16,
+            padding: "18px 18px 16px",
+            backdropFilter: "blur(8px)",
+            position: "relative",
+            zIndex: 2,
+          }}
+        >
+          <div
+            style={{
+              color: "rgba(255,255,255,0.75)",
+              fontSize: 12,
+              fontWeight: 700,
+              marginBottom: 10,
+              letterSpacing: 0.4,
+              textTransform: "uppercase",
+            }}
+          >
+            Supabase sign-in (persistent)
+          </div>
+          <input
+            type="email"
+            autoComplete="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="Email"
+            disabled={submitting}
+            style={{
+              width: "100%",
+              boxSizing: "border-box",
+              padding: "10px 12px",
+              fontSize: 14,
+              borderRadius: 10,
+              border: `1px solid ${PURPLE}40`,
+              background: "rgba(255,255,255,0.95)",
+              color: "#2D2D2D",
+              marginBottom: 10,
+            }}
+          />
+          <input
+            type="password"
+            autoComplete="current-password"
+            value={emailPassword}
+            onChange={(e) => setEmailPassword(e.target.value)}
+            placeholder="Password"
+            disabled={submitting}
+            style={{
+              width: "100%",
+              boxSizing: "border-box",
+              padding: "10px 12px",
+              fontSize: 14,
+              borderRadius: 10,
+              border: `1px solid ${PURPLE}40`,
+              background: "rgba(255,255,255,0.95)",
+              color: "#2D2D2D",
+              marginBottom: 10,
+            }}
+          />
+          <button
+            type="submit"
+            disabled={submitting || !email || !emailPassword}
+            style={{
+              width: "100%",
+              padding: "10px 14px",
+              fontSize: 14,
+              fontWeight: 700,
+              border: "none",
+              borderRadius: 10,
+              cursor: submitting ? "wait" : "pointer",
+              background: `linear-gradient(135deg, ${PURPLE}, #4A2D6B)`,
+              color: "#fff",
+              fontFamily: "'DM Sans', sans-serif",
+              opacity: submitting ? 0.85 : 1,
+            }}
+          >
+            Sign in with Supabase
+          </button>
+        </form>
+      ) : null}
+
       {googleClientId ? (
         <>
           <p
@@ -311,7 +477,7 @@ export default function StaffLogin() {
         </>
       ) : null}
 
-      <p style={{ marginTop: 28, fontSize: 13 }}>
+      <p style={{ marginTop: 28, fontSize: 13, position: "relative", zIndex: 2 }}>
         <Link
           to="/"
           style={{ color: "rgba(255,255,255,0.75)", textDecoration: "underline" }}
