@@ -1,9 +1,13 @@
 import type { drive_v3 } from "googleapis";
 import { getRedis } from "./threadStore.js";
 import {
+  getInternalDriveRoots,
   getInternalDriveRootIds,
+  getPublicDriveRoots,
   getPublicDriveRootIds,
   getServiceAccountCredentials,
+  type DriveRoot,
+  type DriveRootSource,
 } from "./driveConfig.js";
 import { createDriveClient, listFilesRecursive } from "./driveClient.js";
 
@@ -36,6 +40,7 @@ export type DriveIndexedFile = {
   name: string;
   mimeType: string;
   modifiedTime?: string;
+  source: DriveRootSource;
   text: string;
 };
 
@@ -94,6 +99,10 @@ function folderIdsForScope(scope: RagScope): string[] {
   return scope === "public" ? getPublicDriveRootIds() : getInternalDriveRootIds();
 }
 
+function rootsForScope(scope: RagScope): DriveRoot[] {
+  return scope === "public" ? getPublicDriveRoots() : getInternalDriveRoots();
+}
+
 export function isDriveRagReadyForScope(scope: RagScope): boolean {
   const creds = getServiceAccountCredentials();
   const redis = !!process.env.UPSTASH_REDIS_REST_URL && !!process.env.UPSTASH_REDIS_REST_TOKEN;
@@ -108,8 +117,9 @@ export async function buildDriveIndexForScope(
 ): Promise<{ ok: boolean; error?: string; stats?: { files: number } }> {
   try {
     const creds = getServiceAccountCredentials();
-    const folderIds = folderIdsForScope(scope);
-    if (!creds || folderIds.length === 0) {
+    const roots = rootsForScope(scope);
+    const folderIds = roots.map((r) => r.id);
+    if (!creds || roots.length === 0) {
       const need =
         scope === "public"
           ? "DRIVE_RAG_FOLDER_ID_PUBLIC (folder ID from the Drive URL …/folders/THIS_PART, or paste the full folder URL)"
@@ -128,11 +138,11 @@ export async function buildDriveIndexForScope(
     const drive = createDriveClient(creds);
     const { extractDriveFileText } = await import("./driveExtract.js");
     const gatherState = { n: 0 };
-    let all: drive_v3.Schema$File[] = [];
-    for (const fid of folderIds) {
+    let all: Array<drive_v3.Schema$File & { __rootSource?: DriveRootSource }> = [];
+    for (const root of roots) {
       if (gatherState.n >= maxGather) break;
-      const part = await listFilesRecursive(drive, fid, 0, maxGather, gatherState);
-      all.push(...part);
+      const part = await listFilesRecursive(drive, root.id, 0, maxGather, gatherState);
+      all.push(...part.map((f) => ({ ...f, __rootSource: root.source })));
     }
     const seen = new Set<string>();
     all = all.filter((f) => {
@@ -156,6 +166,7 @@ export async function buildDriveIndexForScope(
         name: f.name!,
         mimeType: f.mimeType!,
         modifiedTime: f.modifiedTime ?? undefined,
+        source: f.__rootSource ?? (scope === "public" ? "public" : "legacy_internal"),
         text,
       });
     }
@@ -224,22 +235,108 @@ async function loadIndex(scope: RagScope): Promise<DriveIndexPayload | null> {
   try {
     const parsed = JSON.parse(raw) as DriveIndexPayload & { scope?: RagScope };
     if (parsed.scope != null && parsed.scope !== scope) return null;
+    const files = Array.isArray(parsed.files)
+      ? parsed.files.map((f) => ({
+          ...f,
+          source:
+            typeof (f as { source?: unknown }).source === "string"
+              ? ((f as { source: DriveRootSource }).source as DriveRootSource)
+              : scope === "public"
+                ? "public"
+                : "legacy_internal",
+        }))
+      : [];
     if (parsed.scope == null) {
-      return { ...parsed, scope } as DriveIndexPayload;
+      return { ...parsed, scope, files } as DriveIndexPayload;
     }
-    return parsed as DriveIndexPayload;
+    return { ...(parsed as DriveIndexPayload), files };
   } catch {
     return null;
   }
 }
 
 function scoreFile(queryTokens: string[], f: DriveIndexedFile): number {
-  const hay = `${f.name} ${f.text}`.toLowerCase();
+  const fileName = f.name.toLowerCase();
+  const hay = `${fileName} ${f.text}`.toLowerCase();
   let s = 0;
   for (const t of queryTokens) {
+    if (fileName.includes(t)) s += 4;
     if (hay.includes(t)) s += 1;
   }
   return s;
+}
+
+function hasGrantIntent(queryTokens: string[]): boolean {
+  return queryTokens.some((t) =>
+    [
+      "grant",
+      "grants",
+      "funder",
+      "funding",
+      "application",
+      "nofa",
+      "rfp",
+      "proposal",
+      "narrative",
+      "award",
+      "awarded",
+      "budget",
+      "deadline",
+      "compliance",
+    ].includes(t),
+  );
+}
+
+function hasNewsletterIntent(queryTokens: string[]): boolean {
+  return queryTokens.some((t) => ["newsletter", "annual", "report", "season", "recap"].includes(t));
+}
+
+function sourceBias(queryTokens: string[], f: DriveIndexedFile): number {
+  switch (f.source) {
+    case "internal":
+      return 6;
+    case "legacy_internal":
+      return 5;
+    case "grants":
+      return hasGrantIntent(queryTokens) ? 5 : 1;
+    case "annual_newsletter":
+      return hasNewsletterIntent(queryTokens) ? 4 : 1;
+    case "public":
+    default:
+      return 0;
+  }
+}
+
+function rankFiles(queryTokens: string[], files: DriveIndexedFile[], scope: RagScope): DriveIndexedFile[] {
+  const ranked = files
+    .map((f) => ({
+      f,
+      score: scoreFile(queryTokens, f) + sourceBias(queryTokens, f),
+    }))
+    .filter((x) => x.score > 0)
+    .sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      return (b.f.modifiedTime ?? "").localeCompare(a.f.modifiedTime ?? "");
+    });
+
+  if (scope !== "internal") {
+    return ranked.slice(0, TOP_CHUNKS).map((x) => x.f);
+  }
+
+  const primary = ranked
+    .filter((x) => x.f.source === "internal" || x.f.source === "legacy_internal")
+    .slice(0, TOP_CHUNKS);
+  const secondary = ranked.filter((x) => x.f.source !== "internal" && x.f.source !== "legacy_internal");
+
+  const chosen: DriveIndexedFile[] = primary.map((x) => x.f);
+  for (const { f } of secondary) {
+    if (chosen.length >= TOP_CHUNKS) break;
+    if (chosen.some((c) => c.id === f.id)) continue;
+    chosen.push(f);
+  }
+
+  if (chosen.length > 0) return chosen;
+  return ranked.slice(0, TOP_CHUNKS).map((x) => x.f);
 }
 
 function excerptAround(text: string, queryTokens: string[], maxLen: number): string {
@@ -263,21 +360,20 @@ export async function retrieveDriveRagContext(userQuery: string, scope: RagScope
   if (!isDriveRagReadyForScope(scope)) return null;
 
   const idx = await loadIndex(scope);
-  if (!idx || idx.files.length === 0) {
-    return (
-      `Drive knowledge base (${scope}): not indexed yet. Ask an admin to POST /api/jobs/run with ` +
-      `{"job":"reindex-drive","scope":"${scope}"} or "both" (Bearer CRON_SECRET).`
+  const fileCount = Array.isArray(idx?.files) ? idx.files.length : 0;
+  if (!idx || fileCount === 0) {
+    // Do not inject admin-only ops text into the model — it gets repeated to end users.
+    // Admins use GET /api/integrations/status and logs instead.
+    console.warn(
+      `[driveRag] No indexed files for scope=${scope} (reindex or fix Drive/Redis). Retrieval skipped.`,
     );
+    return null;
   }
 
   const queryTokens = tokenize(userQuery);
   if (queryTokens.length === 0) return null;
 
-  const scored = idx.files
-    .map((f) => ({ f, score: scoreFile(queryTokens, f) }))
-    .filter((x) => x.score > 0)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, TOP_CHUNKS);
+  const scored = rankFiles(queryTokens, idx.files, scope);
 
   if (scored.length === 0) {
     const recent = [...idx.files]
@@ -298,7 +394,11 @@ export async function retrieveDriveRagContext(userQuery: string, scope: RagScope
     for (const f of recent) {
       const cap = scope === "public" ? 2200 : 3200;
       const body = f.text.length > cap ? `${f.text.slice(0, cap)}\n…[truncated]` : f.text;
-      parts.push(`### ${f.name}\n${body}`);
+      const sourceLabel =
+        scope === "internal"
+          ? ` (${f.source === "internal" || f.source === "legacy_internal" ? "internal" : f.source.replaceAll("_", " ")})`
+          : "";
+      parts.push(`### ${f.name}${sourceLabel}\n${body}`);
     }
     let out = parts.join("\n\n");
     if (out.length > MAX_CONTEXT_CHARS) {
@@ -314,9 +414,13 @@ export async function retrieveDriveRagContext(userQuery: string, scope: RagScope
   const parts: string[] = [
     `${label} (indexed ${idx.builtAt}, folder ${idx.folderId}). Cite filenames when using excerpts.`,
   ];
-  for (const { f } of scored) {
+  for (const f of scored) {
     const ex = excerptAround(f.text, queryTokens, 3200);
-    parts.push(`### ${f.name}\n${ex}`);
+    const sourceLabel =
+      scope === "internal"
+        ? ` (${f.source === "internal" || f.source === "legacy_internal" ? "internal" : f.source.replaceAll("_", " ")})`
+        : "";
+    parts.push(`### ${f.name}${sourceLabel}\n${ex}`);
   }
   let out = parts.join("\n\n");
   if (out.length > MAX_CONTEXT_CHARS) {

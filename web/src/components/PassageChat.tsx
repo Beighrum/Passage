@@ -9,6 +9,7 @@ import { isImageMediaType } from "../../shared/chatMessages";
 const PURPLE = "#7B4F9E";
 const DARK_PURPLE = "#4A2D6B";
 const LIGHT_PURPLE = "#F3EBF9";
+const TINT_PURPLE = "#F8F3FD";
 const CHARCOAL = "#2D2D2D";
 const SOFT_WHITE = "#FAFAFA";
 
@@ -498,11 +499,11 @@ export default function PassageChat({ variant }: PassageChatProps) {
                       borderBottomRightRadius: 4,
                     }
                   : {
-                      background: "#fff",
+                      background: TINT_PURPLE,
                       color: CHARCOAL,
                       borderBottomLeftRadius: 4,
-                      boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
-                      border: `1px solid ${PURPLE}10`,
+                      boxShadow: "0 8px 18px rgba(33, 13, 56, 0.08)",
+                      border: `1px solid ${PURPLE}1f`,
                     }),
                 fontSize: 14,
                 lineHeight: 1.55,
@@ -553,15 +554,16 @@ export default function PassageChat({ variant }: PassageChatProps) {
                 setInput(action);
                 window.setTimeout(() => inputRef.current?.focus(), 50);
               }}
+              className="quickAction"
               style={{
                 padding: "8px 14px",
                 borderRadius: 20,
                 fontSize: 12,
-                background: "#fff",
-                border: `1px solid ${PURPLE}30`,
-                color: PURPLE,
+                background: "rgba(255,255,255,0.9)",
+                border: `1px solid ${PURPLE}3a`,
+                color: DARK_PURPLE,
                 cursor: "pointer",
-                fontWeight: 500,
+                fontWeight: 600,
                 fontFamily: "'DM Sans', sans-serif",
                 transition: "all 0.2s ease",
               }}
@@ -787,6 +789,9 @@ export default function PassageChat({ variant }: PassageChatProps) {
           to { opacity: 1; transform: translateY(0); }
         }
         textarea::placeholder { color: #aaa; }
+        .quickAction:hover { transform: translateY(-1px); box-shadow: 0 10px 18px rgba(74,45,107,0.10); border-color: ${PURPLE}66; }
+        .quickAction:active { transform: translateY(0); box-shadow: none; }
+        .quickAction:focus-visible { outline: 2px solid ${PURPLE}66; outline-offset: 2px; }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         ::-webkit-scrollbar { width: 4px; }
         ::-webkit-scrollbar-thumb { background: ${PURPLE}30; border-radius: 4px; }

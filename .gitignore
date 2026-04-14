@@ -18,3 +18,4 @@ Passage theatre 2/
 
 # Grant archive — keep locally; too large for GitHub (2 GiB pack limit). Use Drive or Git LFS if needed.
 Passage theatre/
+.env*.local

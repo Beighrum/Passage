@@ -8,6 +8,18 @@ export type ServiceAccountCreds = {
   private_key: string;
 };
 
+export type DriveRootSource =
+  | "public"
+  | "internal"
+  | "grants"
+  | "annual_newsletter"
+  | "legacy_internal";
+
+export type DriveRoot = {
+  id: string;
+  source: DriveRootSource;
+};
+
 export function getServiceAccountCredentials(): ServiceAccountCreds | null {
   const b64 = process.env.GOOGLE_SERVICE_ACCOUNT_JSON_B64?.trim();
   const raw = process.env.GOOGLE_SERVICE_ACCOUNT_JSON?.trim();
@@ -52,12 +64,20 @@ function splitFolderIds(raw: string | undefined): string[] {
   return [...ids];
 }
 
+function splitFolderIdsWithSource(raw: string | undefined, source: DriveRootSource): DriveRoot[] {
+  return splitFolderIds(raw).map((id) => ({ id, source }));
+}
+
 /**
  * Public assistant index: audience PDFs, social summaries, website snippets, ADA, tickets.
  * `DRIVE_RAG_FOLDER_ID_PUBLIC` may list multiple roots separated by commas.
  */
 export function getPublicDriveRootIds(): string[] {
-  return splitFolderIds(process.env.DRIVE_RAG_FOLDER_ID_PUBLIC);
+  return getPublicDriveRoots().map((r) => r.id);
+}
+
+export function getPublicDriveRoots(): DriveRoot[] {
+  return splitFolderIdsWithSource(process.env.DRIVE_RAG_FOLDER_ID_PUBLIC, "public");
 }
 
 /**
@@ -68,16 +88,43 @@ export function getPublicDriveRootIds(): string[] {
  * If none of the above yield IDs, falls back to legacy `DRIVE_RAG_FOLDER_ID`.
  */
 export function getInternalDriveRootIds(): string[] {
+  return getInternalDriveRoots().map((r) => r.id);
+}
+
+export function getInternalDriveRoots(): DriveRoot[] {
   const ids = new Set<string>();
-  for (const id of splitFolderIds(process.env.DRIVE_RAG_FOLDER_ID_INTERNAL)) ids.add(id);
-  const g = normalizeDriveFolderId(process.env.DRIVE_RAG_FOLDER_ID_GRANTS ?? "");
-  if (g) ids.add(g);
-  const n = normalizeDriveFolderId(process.env.DRIVE_RAG_FOLDER_ID_ANNUAL_NEWSLETTER ?? "");
-  if (n) ids.add(n);
-  if (ids.size === 0) {
-    for (const id of splitFolderIds(process.env.DRIVE_RAG_FOLDER_ID)) ids.add(id);
+  const roots: DriveRoot[] = [];
+
+  for (const root of splitFolderIdsWithSource(process.env.DRIVE_RAG_FOLDER_ID_INTERNAL, "internal")) {
+    if (ids.has(root.id)) continue;
+    ids.add(root.id);
+    roots.push(root);
   }
-  return [...ids];
+
+  for (const root of splitFolderIdsWithSource(process.env.DRIVE_RAG_FOLDER_ID_GRANTS, "grants")) {
+    if (ids.has(root.id)) continue;
+    ids.add(root.id);
+    roots.push(root);
+  }
+
+  for (const root of splitFolderIdsWithSource(
+    process.env.DRIVE_RAG_FOLDER_ID_ANNUAL_NEWSLETTER,
+    "annual_newsletter",
+  )) {
+    if (ids.has(root.id)) continue;
+    ids.add(root.id);
+    roots.push(root);
+  }
+
+  if (roots.length === 0) {
+    for (const root of splitFolderIdsWithSource(process.env.DRIVE_RAG_FOLDER_ID, "legacy_internal")) {
+      if (ids.has(root.id)) continue;
+      ids.add(root.id);
+      roots.push(root);
+    }
+  }
+
+  return roots;
 }
 
 /** Display string for indexed payload (joined IDs) */
