@@ -30,6 +30,19 @@
   --border: 270 20% 90%;
   --input: 270 20% 90%;
   --ring: 270 34% 46%;
+
+  /* Claude-style surface tokens, adapted to Passage purples */
+  --bg-0: #fbf9ff;
+  --bg-100: rgba(255, 255, 255, 0.78);
+  --bg-200: rgba(123, 79, 158, 0.08);
+  --bg-300: rgba(74, 45, 107, 0.18);
+  --text-100: #1f1a26;
+  --text-200: #2b2433;
+  --text-300: rgba(31, 26, 38, 0.62);
+  --text-400: rgba(31, 26, 38, 0.46);
+  --text-500: rgba(31, 26, 38, 0.38);
+  --accent: #7b4f9e;
+  --accent-hover: #4a2d6b;
 }
 
 *,
@@ -48,4 +61,35 @@ body,
 body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  background: radial-gradient(1200px 900px at 50% 0%, rgba(123, 79, 158, 0.18) 0%, rgba(123, 79, 158, 0.06) 38%, rgba(255, 255, 255, 0) 70%),
+    linear-gradient(180deg, #fbf9ff 0%, #ffffff 55%);
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.99);
+    filter: blur(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 280ms ease-out both;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  height: 6px;
+  width: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(123, 79, 158, 0.25);
+  border-radius: 999px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
 }
